@@ -67,7 +67,7 @@ TreeMap：元素按序排列。
 
 #### 1.4 BlockingQueue
 
-提供了可阻塞的插入和移除方法，被广泛应用于“生产者-消费者”场景。其实现类有ArrayBlockingQueue、LinkedBlockingQueue、PriorityBlockingQueue；
+提供了可阻塞的插入和移除方法，被广泛应用于“生产者-消费者”场景。其实现类有ArrayBlockingQueue:是基于数组实现的，因此创建时必须指定容量，一旦创建成功就不能再改变容量，默认情况下是非公平访问(内部使用ReentrantLock实现)；LinkedBlockingQueue：基于链表实现，若创建时未指定容量，则按Integer.MAX_VALUE处理、PriorityBlockingQueue：PriorityQueue的线程安全版本；
 
 ### 2. 线程
 #### 2.1 线程创建
@@ -358,7 +358,7 @@ class Consumer implements Runnable {
 #### 2.2.3  Atomic 原子类
 
 juc.atomic包下提供了原子类型的基本类型、数组类型、引用类型的
-类和有关方法，支持使用原子操作更新或设置值。
+类和有关方法，支持使用原子操作更新或设置值，底层利用CAS操作来实现。
 
 ### 2.3 锁
 #### 3.1 悲观锁
@@ -370,9 +370,8 @@ CAS算法是乐观锁的一种实现，它先读入要更新的变量值V，并�
 
 CAS存在三大问题：ABA、循环时间开销大（自旋）、只能对单个共享变量有效。
 
-### 2.4 线程池
 
-### 2.5 ThreadLocl
+### 2.4 ThreadLocl
 该类型的变量会自动在每个访问的线程中都保留一个副本，线程可以调用threadLocal.get() 或者 threadLocal.set()来获取值或者修改值,使用方法如下：
 ```java
 public class ThreadLocalExample {
@@ -396,3 +395,14 @@ public class ThreadLocalExample {
 
 ```
 底层原理：每个线程内部维护一个ThreadLocalMap，其记录了ThreadLocal变量的弱引用和其对应的值。
+
+ThreadLocal为什么会内存泄漏？
+
+ThreadLocalMap使用ThreadLocal的弱引用作为key，如果一个ThreadLocal没有外部强引用来引用它，那么系统 GC 的时候，这个ThreadLocal势必会被回收，这样一来，ThreadLocalMap中就会出现key为null的Entry，就没有办法访问这些key为null的Entry的value，如果当前线程再迟迟不结束的话，这些key为null的Entry的value就会一直存在一条强引用链：Thread Ref -> Thread -> ThreaLocalMap -> Entry -> value永远无法回收，造成内存泄漏。
+
+其实，ThreadLocalMap的设计中已经考虑到这种情况，也加上了一些防护措施：在ThreadLocal的get(),set(),remove()的时候都会清除线程ThreadLocalMap里所有key为null的value。
+
+但是这些被动的预防措施并不能保证不会内存泄漏：
+
+使用static的ThreadLocal，延长了ThreadLocal的生命周期，可能导致的内存泄漏（参考ThreadLocal 内存泄露的实例分析）。
+分配使用了ThreadLocal又不再调用get(),set(),remove()方法，那么就会导致内存泄漏。
